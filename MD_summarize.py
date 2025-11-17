@@ -166,66 +166,23 @@ class MarkdownAnalyzer:
 # 请确保报告内容详实、逻辑清晰、分析深入。使用中文撰写。
 # """
         prompt = f"""
-你是一位专业的研究分析师。请分析以下论文总结内容，生成一份该选题的研究报告。
-
-论文内容：
-{papers_content}
-
-请用纯文本形式体现你的研究报告，不需要分点。大约500字。
-
-请确保报告内容详实、逻辑清晰、分析深入。使用中文撰写。
-"""
-        print("正在调用LLM API分析论文内容...")
+        你是一位专业的研究分析师。请分析以下论文总结内容，生成一份该选题的研究报告。
+        
+        论文内容：
+        {papers_content}
+        
+        请确保报告内容详实、逻辑清晰、分析深入。使用中文撰写。
+        如果涉及引用，请标明引用内容来自哪一篇论文。
+        """
+        print("正在生成API请求...")
         report = self.call_llm_api(prompt, max_tokens=65535)
-        
-        if not report:
-            return self._generate_fallback_report(md_files)
-        
+
         return report
-    
-    def _generate_fallback_report(self, md_files: List[Dict[str, str]]) -> str:
-        """
-        当API调用失败时生成基础报告
-        
-        Args:
-            md_files: markdown文件列表
-            
-        Returns:
-            基础报告内容
-        """
-        report = f"""# 研究报告
 
-## 分析概述
-本次分析了 {len(md_files)} 篇论文总结，文件列表如下：
-
-"""
-        
-        for i, file_info in enumerate(md_files, 1):
-            report += f"{i}. {file_info['filename']}\n"
-        
-        report += f"""
-## 文件内容摘要
-
-"""
-        
-        for i, file_info in enumerate(md_files, 1):
-            report += f"### {file_info['filename']}\n\n"
-            # 取前500个字符作为摘要
-            content_preview = file_info['content'][:500] + "..." if len(file_info['content']) > 500 else file_info['content']
-            report += f"{content_preview}\n\n"
-        
-        report += """
-## 说明
-由于LLM API调用失败，以上为基础文件摘要。建议检查API配置后重新运行脚本。
-
-"""
-        
-        return report
-    
     def save_report(self, report: str, output_path: str):
         """
         保存报告到文件
-        
+
         Args:
             report: 报告内容
             output_path: 输出文件路径
@@ -237,53 +194,64 @@ class MarkdownAnalyzer:
         except Exception as e:
             print(f"保存报告失败: {e}")
 
+
 def main():
     # 使用硬编码的配置
     directory = MARKDOWN_DIRECTORY
     api_key = API_KEY
     api_base = API_BASE
     model = MODEL
-    
+
     # 检查目录是否存在
     if not os.path.isdir(directory):
         print(f"错误: 目录 '{directory}' 不存在")
         print(f"请修改脚本中的 MARKDOWN_DIRECTORY 变量为正确的路径")
         return
-    
+
     # 检查API密钥是否已配置
     if api_key == "your-api-key-here":
         print("错误: 请修改脚本中的 API_KEY 变量为你的实际API密钥")
         return
-    
+
     # 生成输出文件名（保存在同一目录下）
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = os.path.join(directory, f"research_report_{timestamp}.md")
-    
+
     # 创建分析器
     analyzer = MarkdownAnalyzer(
         api_key=api_key,
         api_base=api_base,
         model=model
     )
-    
+
     print(f"开始分析目录: {directory}")
-    
+
     # 读取markdown文件
     md_files = analyzer.read_markdown_files(directory)
-    
+
     if not md_files:
         print("未找到任何markdown文件")
         return
-    
+
     print(f"找到 {len(md_files)} 个markdown文件")
-    
+
     # 分析论文并生成报告
     report = analyzer.analyze_papers(md_files)
-    
-    # 保存报告
-    analyzer.save_report(report, output_path)
-    
-    print("分析完成！")
+
+    # 在报告末尾追加“论文编号 ↔ 文件名”的对应关系，方便查看引用来源
+    if report:
+        appendix = "\n\n---\n\n参考论文列表（编号与文件名对应）：\n"
+        for i, file_info in enumerate(md_files, 1):
+            appendix += f"\n论文 {i}: {file_info['filename']}\n"
+        report += appendix
+
+    if not report:
+        print("分析失败，报告未保存")
+    else:
+        # 保存报告
+        analyzer.save_report(report, output_path)
+        print("分析完成！")
+
 
 if __name__ == "__main__":
     main()
